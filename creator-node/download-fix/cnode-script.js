@@ -10,6 +10,8 @@ const transcodeFileTo320 = require('./ffmpeg.js')
 const initIPFS = async () => {
   const ipfsHost = process.env.ipfsHost
   const ipfsPort = process.env.ipfsPort
+  // const ipfsHost = "localhost"
+  // const ipfsPort = 6001
   if (!ipfsHost || !ipfsPort) {
     console.log('Must set ipfsHost and ipfsPort envvars.')
     process.exit(1)
@@ -18,6 +20,11 @@ const initIPFS = async () => {
   const identity = await ipfs.id()
   console.log(`Current IPFS Peer ID: ${JSON.stringify(identity)}`)
   return ipfs
+}
+
+const timeout = async (ms) => {
+  console.log(`starting timeout of ${ms}`)
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 /**
@@ -46,31 +53,35 @@ const processSourceFile = async (workDir, sourceFileName, ipfs, transaction = nu
   fs.renameSync(dlCopyFilePath, dstPath)
   console.log(`Moved file from ${dlCopyFilePath} to ${dstPath}`)
 
-  return dstPath
-}
-
-const writeToDb = async (cnodeUserUUID, multihash, sourceFileName, dstPath, transaction = null) => {
-  /** save file to db */
-  const queryObj = {
-    where: {
-      cnodeUserUUID: cnodeUserUUID,
-      multihash: multihash,
-      sourceFile: sourceFileName,
-      storagePath: dstPath,
-      type: 'copy320'
-    },
-  }
-  if (transaction) { queryObj.transaction = transaction }
-  const file = (await models.File.findOrCreate(queryObj))[0].dataValues
+  return { dstPath, multihash }
 }
 
 
 const run = async () => {
+  const dataFilePath = '/usr/src/app/scripts/final-sourcefiles-cn2.txt'
+  let data = fs.readFileSync(dataFilePath, 'utf8').split('\n')
+
   const ipfs = await initIPFS()
 
-  const workDir = '/tmp'
-  const sourceFileName = '7dd121d1-924d-4a2c-b61c-2f8b10af5b98.mp3'
+  // const workDir = '/Users/sid/Documents/Audius/code/audius/sid-test/download-fix/staging/cn1-disk'
+  const workDir = '/file_storage'
   
-  const dstPath = await processSourceFile(workDir, sourceFileName, ipfs)
+  let counter = 1
+  for (const row of data) {
+    
+    if (!row) { continue }
+    
+    const [sourceFile, v] = row.split(': ')
+    const [cnodeUserUUID, trackUUID] = v.split(',')
+
+    console.log(`SOURCEFILE: ${sourceFile} || CNODEUSERUUID: ${cnodeUserUUID} || TRACKUUID: ${trackUUID}`)
+    continue
+    
+    const { dstPath, multihash } = await processSourceFile(workDir, sourceFile, ipfs)
+    
+    console.log(`SIDTEST SOURCEFILE: ${sourceFile} || CNODEUSERUUID: ${cnodeUserUUID} || TRACKUUID: ${trackUUID} || MULTIHASH: ${multihash} || DSTPATH: ${dstPath}`)
+    console.log(`COMPLETED ROW #${counter++}`)
+    await timeout(1000)
+  }
 }
 run()
